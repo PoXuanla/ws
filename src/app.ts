@@ -48,23 +48,35 @@ io.on("connection", (socket: Socket) => {
 
   const clientId = socket.handshake.auth.clientId;
 
-  if(userRooms.has(clientId)){
+  if (userRooms.has(clientId)) {
     const previousRoom = userRooms.get(clientId);
     socket.join(previousRoom);
     console.log(`用戶 ${clientId} 重新加入房間 ${previousRoom}`);
 
+    // io.to(previousRoom).emit('comeback', roomsMsgs[previousRoom]);
+
     io.to(previousRoom).emit('receive_message', {
       user: clientId,
+      room:previousRoom,
       content: `${clientId} 回到 ${previousRoom} 房間`,
     });
+
+  
   }
+
+  console.log("Default room:", io.sockets.adapter.rooms);
+
 
   socket.on("join_room", (room: string) => {
     socket.join(room);
 
     userRooms.set(clientId, room);
-    
+
     console.log(`用戶 ${socket.id} 加入房間 ${room}`);
+
+
+    console.log("Default room2:", io.sockets.adapter.rooms);
+
 
 
     // 向房間內的所有用戶廣播當前房間人數
@@ -78,7 +90,7 @@ io.on("connection", (socket: Socket) => {
     // 恢復用戶的房間
     const previousRoom = userRooms.get(socket.id);
     if (previousRoom) {
-      socket.join(previousRoom);  
+      socket.join(previousRoom);
       console.log(`用戶 ${socket.id} 重新加入房間 ${previousRoom}`);
     }
   });
@@ -87,6 +99,7 @@ io.on("connection", (socket: Socket) => {
     console.log("data", data);
     io.to(data.room).emit("receive_message", {
       ...data,
+      user:clientId,
       timestamp: new Date().toISOString(),
     });
 
