@@ -1,8 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const { createServer } = require("http");
-const { Server } = require("socket.io");
-const config = require("./config/config");
+import config from "./config/config";
+import { Server, Socket } from "socket.io";
 
 const app = express();
 const httpServer = createServer(app);
@@ -32,35 +32,44 @@ app.get("/api/health", (req, res) => {
 });
 
 const userRooms = new Map();
-const sessions = new Map();
 
-// io.use((socket, next) => {
-//   const clientId = socket.handshake.auth.clientId;
+const roomsMsgs = new Map<string, Array<{ room: string, content: string, user: string }>>();
 
-//   if (clientId) {
-//     // 恢復之前的會話
-//     const sessionInfo = sessions.get(clientId);
-//     if (sessionInfo) {
-//       socket.id = clientId; // 使用原來的 ID
-//       socket.rooms = new Set(sessionInfo.rooms); // 恢復房間信息
-//     }
-//   }
+// 獲取指定房間的人數
+function getRoomUserCount(roomName: string): number {
+  return io.sockets.adapter.rooms.get(roomName)?.size || 0;
+}
 
-//   next();
-// });
+
+
 
 // Socket.IO 事件處理
-io.on("connection", (socket) => {
-  console.log("用戶已連接:", socket.id);
+io.on("connection", (socket: Socket) => {
 
-  socket.on("join_room", (room) => {
-    socket.join(room);
-    userRooms.set(socket.id, room);
-    console.log(`用戶 ${socket.id} 加入房間 ${room}`);
-    // 保存用戶的房間信息
-    sessions.set(socket.id, {
-      rooms: Array.from(socket.rooms),
+  const clientId = socket.handshake.auth.clientId;
+
+  if(userRooms.has(clientId)){
+    const previousRoom = userRooms.get(clientId);
+    socket.join(previousRoom);
+    console.log(`用戶 ${clientId} 重新加入房間 ${previousRoom}`);
+
+    io.to(previousRoom).emit('receive_message', {
+      user: clientId,
+      content: `${clientId} 回到 ${previousRoom} 房間`,
     });
+  }
+
+  socket.on("join_room", (room: string) => {
+    socket.join(room);
+
+    userRooms.set(clientId, room);
+    
+    console.log(`用戶 ${socket.id} 加入房間 ${room}`);
+
+
+    // 向房間內的所有用戶廣播當前房間人數
+    const userCount = getRoomUserCount(room)
+    io.to(room).emit('roomUserCount', userCount);
   });
 
   // 斷線重連處理
@@ -69,17 +78,23 @@ io.on("connection", (socket) => {
     // 恢復用戶的房間
     const previousRoom = userRooms.get(socket.id);
     if (previousRoom) {
-      socket.join(previousRoom);
+      socket.join(previousRoom);  
       console.log(`用戶 ${socket.id} 重新加入房間 ${previousRoom}`);
     }
   });
 
-  socket.on("send_message", (data) => {
+  socket.on("send_message", (data: { room: string, content: string, user: string }) => {
     console.log("data", data);
     io.to(data.room).emit("receive_message", {
       ...data,
       timestamp: new Date().toISOString(),
     });
+
+    if (roomsMsgs.has(data.room)) {
+      roomsMsgs.set(data.room, [...roomsMsgs.get(data.room), data]);
+    } else {
+      roomsMsgs.set(data.room, [data]);
+    }
   });
 
   socket.on("disconnect", () => {
