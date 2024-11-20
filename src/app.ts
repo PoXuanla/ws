@@ -1,16 +1,16 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-
 const express = require("express");
 const cors = require("cors");
 const { createServer } = require("http");
 const socket_io_1 = require("socket.io");
-import { setupSocketEvents } from "./socketHandlers.js";
+import type { Server, Socket } from "socket.io";
+
+import { setupSocketEvents } from "./socketHandlers";
+import { UserRooms, RoomsMsgs } from "./types/socket";
 
 function createSocketServer() {
   const app = express();
   const httpServer = createServer(app);
-  const io = new socket_io_1.Server(httpServer, {
+  const io: Server = new socket_io_1.Server(httpServer, {
     cors: {
       origin: "*",
       methods: ["GET", "POST"],
@@ -22,27 +22,27 @@ function createSocketServer() {
     },
   });
 
-  const userRooms = new Map();
-  const roomsMsgs = new Map();
+  const userRooms: UserRooms = new Map();
+  const roomsMsgs: RoomsMsgs = new Map();
 
-  function setupMiddlewares() {
+  const setupMiddlewares = () => {
     app.use(cors());
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
-  }
+  };
 
-  function setupRoutes() {
+  const setupRoutes = () => {
     app.get("/api/health", (req, res) => {
       res.json({ status: "ok", timestamp: new Date().toISOString() });
     });
-  }
+  };
 
-  function setupErrorHandler() {
+  const setupErrorHandler = () => {
     app.use((err, req, res, next) => {
       console.error(err.stack);
       res.status(500).send("Something broke!");
     });
-  }
+  };
 
   setupMiddlewares();
   setupRoutes();
